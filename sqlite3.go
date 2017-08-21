@@ -598,6 +598,9 @@ func errorString(err Error) string {
 //   _txlock=XXX
 //     Specify locking behavior for transactions.  XXX can be "immediate",
 //     "deferred", "exclusive".
+//   _create=true
+//     Create the db file if it doesn't exist. Defaults to true.
+//     Set to false to prevent automatic creation.
 //   _foreign_keys=X
 //     Enable or disable enforcement of foreign keys.  X can be 1 or 0.
 //   _recursive_triggers=X
@@ -608,6 +611,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	}
 
 	var loc *time.Location
+	var flags C.int = C.SQLITE_OPEN_FULLMUTEX | C.SQLITE_OPEN_READWRITE
 	txlock := "BEGIN"
 	busyTimeout := 5000
 	foreignKeys := -1
@@ -654,6 +658,17 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			}
 		}
 
+		// _create
+		if val := params.Get("_create"); val != "" {
+			switch val {
+			case "false":
+				flags = flags | C.SQLITE_OPEN_CREATE
+			case "true":
+			default:
+				return nil, fmt.Errorf("Invalid _create: %v", val)
+			}
+		}
+
 		// _foreign_keys
 		if val := params.Get("_foreign_keys"); val != "" {
 			switch val {
@@ -686,11 +701,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	var db *C.sqlite3
 	name := C.CString(dsn)
 	defer C.free(unsafe.Pointer(name))
-	rv := C._sqlite3_open_v2(name, &db,
-		C.SQLITE_OPEN_FULLMUTEX|
-			C.SQLITE_OPEN_READWRITE|
-			C.SQLITE_OPEN_CREATE,
-		nil)
+	rv := C._sqlite3_open_v2(name, &db, flags, nil)
 	if rv != 0 {
 		return nil, Error{Code: ErrNo(rv)}
 	}

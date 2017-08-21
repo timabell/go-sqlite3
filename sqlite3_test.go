@@ -41,20 +41,20 @@ func doTestOpen(t *testing.T, option string) (string, error) {
 	} else {
 		url = tempFilename
 	}
+	fmt.Println(url)
 	db, err := sql.Open("sqlite3", url)
 	if err != nil {
 		return "Failed to open database:", err
 	}
-	defer os.Remove(tempFilename)
 	defer db.Close()
 
-	_, err = db.Exec("drop table foo")
 	_, err = db.Exec("create table foo (id integer)")
 	if err != nil {
 		return "Failed to create table:", err
 	}
 
 	if stat, err := os.Stat(tempFilename); err != nil || stat.IsDir() {
+		fmt.Println(stat)
 		return "Failed to create ./foo.db", nil
 	}
 
@@ -68,12 +68,13 @@ func TestOpen(t *testing.T) {
 		"?_txlock=deferred":  true,
 		"?_txlock=exclusive": true,
 		"?_txlock=bogus":     false,
+		"?_create=false":     false,
 	}
 	for option, expectedPass := range cases {
 		result, err := doTestOpen(t, option)
 		if result == "" {
 			if !expectedPass {
-				errmsg := fmt.Sprintf("_txlock error not caught at dbOpen with option: %s", option)
+				errmsg := fmt.Sprintf("Option %s should cause error", option)
 				t.Fatal(errmsg)
 			}
 		} else if expectedPass {
